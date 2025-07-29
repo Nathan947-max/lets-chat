@@ -1,0 +1,17 @@
+{
+  "name": "lets-chat",
+  "version": "1.0.0",
+  "description": "Real-time chat app with Express and WebSocket",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["chat", "websocket", "express"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.18.3"
+  }
+}

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile-Friendly WebSocket Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #f4f4f4;
+    }
+
+    header {
+      background-color: #007bff;
+      color: white;
+      padding: 15px;
+      text-align: center;
+      font-size: 1.2rem;
+    }
+
+    #status {
+      padding: 10px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 0.9rem;
+    }
+
+    #chat {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      background: white;
+      border-top: 1px solid #ccc;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message {
+      margin: 8px 0;
+      padding: 10px;
+      border-radius: 10px;
+      max-width: 75%;
+      word-wrap: break-word;
+      line-height: 1.4;
+    }
+
+    .you {
+      background-color: #d0eaff;
+      align-self: flex-end;
+      text-align: right;
+      margin-left: auto;
+    }
+
+    .other {
+      background-color: #e0e0e0;
+      align-self: flex-start;
+      margin-right: auto;
+    }
+
+    .meta {
+      font-size: 0.75em;
+      color: #555;
+    }
+
+    #typing {
+      font-style: italic;
+      font-size: 0.85em;
+      color: #888;
+      padding: 5px 10px;
+      min-height: 20px;
+    }
+
+    .input-area {
+      display: flex;
+      padding: 10px;
+      background: #fff;
+      border-top: 1px solid #ccc;
+    }
+
+    #msg {
+      flex: 1;
+      padding: 10px;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    #sendBtn {
+      margin-left: 10px;
+      padding: 10px 16px;
+      font-size: 1rem;
+      background-color: #007bff;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+    }
+
+    #sendBtn:disabled {
+      background-color: #999;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 600px) {
+      header {
+        font-size: 1rem;
+        padding: 10px;
+      }
+
+      #msg {
+        font-size: 1rem;
+      }
+
+      #sendBtn {
+        padding: 10px;
+        font-size: 0.9rem;
+      }
+
+      .message {
+        font-size: 0.95rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>💬 Mobile WebSocket Chat</header>
+  <div id="status">Connecting...</div>
+  <div id="chat"></div>
+  <div id="typing"></div>
+
+  <div class="input-area">
+    <input id="msg" type="text" placeholder="Type a message..." disabled />
+    <button id="sendBtn" disabled>Send</button>
+  </div>
+
+  <script>
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;',
+        '"': '&quot;', "'": '&#39;'
+      }[match]));
+    }
+
+    function formatTime(date) {
+      return date.toTimeString().slice(0, 5);
+    }
+
+    let nickname = '';
+    while (!nickname) {
+      nickname = prompt("Enter your nickname:")?.trim();
+    }
+
+    const statusEl = document.getElementById('status');
+    const chatBox = document.getElementById('chat');
+    const typingEl = document.getElementById('typing');
+    const msgInput = document.getElementById('msg');
+    const sendBtn = document.getElementById('sendBtn');
+
+    const socket = new WebSocket(`wss://${location.host}`);
+
+    let typingTimeout;
+
+    socket.onopen = () => {
+      statusEl.textContent = `✅ Connected as ${nickname}`;
+      msgInput.disabled = false;
+      sendBtn.disabled = false;
+      socket.send(JSON.stringify({ type: 'join', nickname }));
+    };
+
+    socket.onmessage = (event) => {
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        data = { type: 'message', text: event.data };
+      }
+
+      if (data.type === 'message') {
+        const isYou = data.nickname === nickname;
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message ' + (isYou ? 'you' : 'other');
+
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'meta';
+        metaDiv.textContent = `${escapeHtml(data.nickname)} • ${formatTime(new Date(data.timestamp))}`;
+
+        const textDiv = document.createElement('div');
+        textDiv.textContent = data.text;
+
+        msgDiv.appendChild(metaDiv);
+        msgDiv.appendChild(textDiv);
+        chatBox.appendChild(msgDiv);
+
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } else if (data.type === 'typing') {
+        if (data.nickname !== nickname) {
+          typingEl.textContent = `${escapeHtml(data.nickname)} is typing...`;
+          clearTimeout(typingTimeout);
+          typingTimeout = setTimeout(() => typingEl.textContent = '', 2000);
+        }
+      } else if (data.type === 'join') {
+        const notice = document.createElement('div');
+        notice.style.fontStyle = 'italic';
+        notice.style.color = '#777';
+        notice.style.fontSize = '0.9em';
+        notice.textContent = `${escapeHtml(data.nickname)} joined the chat`;
+        chatBox.appendChild(notice);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+    };
+
+    socket.onclose = () => {
+      statusEl.textContent = "🔴 Disconnected from server";
+      msgInput.disabled = true;
+      sendBtn.disabled = true;
+    };
+
+    function sendMessage() {
+      const text = msgInput.value.trim();
+      if (!text) return;
+
+      const msgData = {
+        type: 'message',
+        nickname,
+        text,
+        timestamp: new Date().toISOString(),
+      };
+
+      socket.send(JSON.stringify(msgData));
+      msgInput.value = '';
+      typingEl.textContent = '';
+    }
+
+    msgInput.addEventListener('input', () => {
+      socket.send(JSON.stringify({ type: 'typing', nickname }));
+    });
+
+    msgInput.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+  </script>
+</body>
+</html>
